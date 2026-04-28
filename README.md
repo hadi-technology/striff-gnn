@@ -6,138 +6,162 @@ Built as part of [STRIFF](https://striff.io) — AI-powered code review.
 
 ## How it works
 
+The pipeline turns source code into graphs, then trains a GNN to predict whether nodes should be connected:
+
 ```
-Source repos ──▶ Clarpse parser ──▶ Normalized graphs ──▶ 404-dim features ──▶ HGT encoder ──▶ Edge reconstruction
-                      │                    │                     │                    │
-                      │              {nodes, edges,        text emb (384) +      ArchGraphMAE
-                      │               metrics}             metrics (9) +         (HGT + decoder)
-                      │                                    type (7) +
-                      │                                    language (3) +
-                      │                                    synthetic (1)
+Source code          Structural           Node features         GNN model
+from open-source  ─▶ graph extraction ──▶ (text + metrics +  ──▶ Learn which
+repos                via Clarpse            type + language)       nodes connect
+                                            = 404 dims per node    and how
 ```
 
-The model learns whether two nodes in a software graph should be connected, and what type of relationship connects them. This is trained as a self-supervised edge reconstruction task: mask some edges, encode the graph, then predict which masked edges exist.
+The model learns a self-supervised task: we hide some edges in the graph, encode what remains, then ask the model to predict which edges we hid. This forces it to learn the structural patterns in real software.
 
-**Edge types** (heterogeneous relations):
-| Type | Meaning |
-|------|---------|
-| EXTENSION | Class extends another class |
-| IMPLEMENTATION | Class implements an interface |
-| COMPOSITION | Strong ownership (has-a) |
-| AGGREGATION | Weak ownership (part-of) |
-| ASSOCIATION | General reference/usage |
+**What the graph looks like:**
+- **Nodes** = classes, interfaces, enums, methods, fields
+- **Edges** = relationships between them:
 
-**Node features** (404 dimensions):
-- Text embedding (384-dim) from `all-MiniLM-L6-v2` sentence transformer on name + comment
-- OOP metrics (9-dim): WMC, DIT, NOC, AC, EC, encapsulation, cyclomatic complexity, refs count, children count
-- Component type one-hot (7-dim): CLASS, INTERFACE, ENUM, METHOD, FIELD, ANNOTATION, OTHER
-- Language one-hot (3-dim): Java, Python, TypeScript
-- Synthetic flag (1-dim): marks auto-generated module nodes
+| Edge type | Meaning | Example |
+|-----------|---------|---------|
+| EXTENSION | Class extends another class | `ArrayList` → `AbstractList` |
+| IMPLEMENTATION | Class implements an interface | `ArrayList` → `List` |
+| COMPOSITION | Strong ownership (has-a) | `Car` → `Engine` |
+| AGGREGATION | Weak ownership (part-of) | `Department` → `Employee` |
+| ASSOCIATION | General reference/usage | `Order` → `Customer` |
+
+**What each node "knows"** (404 dimensions):
+- **Text embedding** (384 dims): The node's name and comment, encoded by a sentence transformer (`all-MiniLM-L6-v2`)
+- **OOP metrics** (9 dims): Complexity, coupling, inheritance depth, etc.
+- **Component type** (7 dims): Is it a CLASS, INTERFACE, ENUM, METHOD, FIELD, ANNOTATION, or OTHER?
+- **Language** (3 dims): Java, Python, or TypeScript?
+- **Synthetic** (1 dim): Is this an auto-generated grouping node? (used for Python/TS files)
 
 ## Quick start
 
 ```bash
-# Install dependencies
+# Install
 pip install -e .
 
-# Run the smoke test (no data or external services needed)
+# Verify everything works (no data or external services needed)
 python scripts/smoke_test.py
 ```
 
+You should see `SMOKE TEST PASSED` after a few seconds.
+
 ## Training pipeline
 
-The full pipeline has 4 stages. All data goes into `./data/` by default (configurable via `STRIFF_DATA_DIR`).
+The full pipeline trains on real open-source repos. It has 4 stages:
 
 ### Prerequisites
 
-- **Clarpse server**: Docker container that parses source code into structural models
-  ```bash
-  docker run -p 8080:8080 clarpse-server
-  ```
-- **GitHub token** (optional, avoids rate limits when cloning): set `GITHUB_TOKEN` in `.env`
-- Copy `.env.example` to `.env` and configure
+1. **[Clarpse](https://github.com/hadii-tech/clarpse)** — a multi-language source code parser that extracts structural models (classes, methods, relationships) from Java, Python, and TypeScript code. It runs as a local HTTP server:
+   ```bash
+   # Clone and build (requires Java 17 + Maven)
+   git clone https://github.com/hadii-tech/clarpse.git
+   cd clarpse
+   mvn clean package assembly:single
+
+   # Start the API server
+   java -cp target/clarpse-*.jar com.hadi.clarpse.server.ClarpseServer
+   # Now listening on http://localhost:8080
+
+   # Verify it's running:
+   curl http://localhost:8080/health
+   ```
+
+2. **GitHub token** (optional, avoids rate limits when cloning repos):
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your token
+   ```
+
+All data is stored in `./data/` by default. Change this by setting `STRIFF_DATA_DIR` in `.env`.
 
 ### Stage 1: Build corpus
 
-Clone repos from `config/repos.yaml` and parse them into normalized graph JSON + PyG datasets:
+Clone the repos listed in `config/repos.yaml`, parse each with Clarpse, and convert to graph format:
 
 ```bash
 python scripts/build_corpus.py
 ```
 
-Output: `data/corpus/repos/`, `data/corpus/graphs/`, `data/corpus/pt/`
+This creates:
+- `data/corpus/repos/` — shallow-cloned source repos
+- `data/corpus/graphs/` — normalized graph JSON files (see [docs/data-format.md](docs/data-format.md))
+- `data/corpus/pt/` — [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/) (PyG) datasets
 
 ### Stage 2: Compute text embeddings
 
-Generate 384-dim sentence embeddings for all nodes using `all-MiniLM-L6-v2`:
+Generate 384-dim sentence embeddings for every node (using the node's name + doc comment):
 
 ```bash
 python scripts/compute_embeddings.py
 ```
 
-Output: `data/corpus/embeddings/{repo_name}.npz`
+Creates `data/corpus/embeddings/{repo_name}.npz`. This downloads `all-MiniLM-L6-v2` on first run (~90 MB).
 
 ### Stage 3: Build training dataset
 
-Sample subgraphs (clustered BFS + random) from each repo:
+Sample subgraphs from each repo for training:
 
 ```bash
 python scripts/build_dataset.py
 ```
 
-Output: `data/dataset/{repo_name}_clustered_{i}.pt`, `data/dataset/{repo_name}_random_{i}.pt`
+Creates `data/dataset/{repo_name}_clustered_{i}.pt` (BFS-clustered subgraphs) and `data/dataset/{repo_name}_random_{i}.pt`.
 
 ### Stage 4: Train
-
-Train the ArchGraphMAE model. Resumable from checkpoint:
 
 ```bash
 python scripts/train.py
 ```
 
-Output: `data/models/best_model.pt`, `data/models/final_model.pt`
+Training is resumable — if interrupted, it continues from the last checkpoint. Creates:
+- `data/models/best_model.pt` — best model by validation AUC
+- `data/models/final_model.pt` — model after the last epoch
 
 ## Model architecture
 
-**ArchGraphMAE** combines a Heterogeneous Graph Transformer encoder with an edge reconstruction decoder:
+**ArchGraphMAE** has two parts:
 
-- **Encoder** (`ArchGNEncoder`): 3-layer HGTConv with 4 attention heads, hidden dim 128. Uses type-specific key/value transforms (`k_rel`, `v_rel`) and edge-type attention priors (`p_rel`) so the model learns different aggregation patterns for inheritance vs composition edges.
+1. **Encoder** — A 3-layer [Heterogeneous Graph Transformer](https://arxiv.org/abs/2003.01332) (HGT) with 4 attention heads. HGT is a GNN architecture that learns *different* aggregation patterns for different edge types — so it treats inheritance edges differently from dependency edges. Hidden dimension is 128.
 
-- **Decoder** (`EdgeReconstructionHead`): Per-edge-type MLP that takes concatenated (src, tgt) embeddings and predicts edge existence. 5 independent heads, one per relation type.
+2. **Decoder** — 5 independent MLP heads (one per edge type). Each takes two node embeddings, concatenates them, and predicts whether that edge should exist.
 
-- **Training**: Masked edge reconstruction with hard negative sampling (2-hop neighbors that aren't directly connected). Binary cross-entropy loss averaged across edge types.
+**Training**: We mask ~50% of edges from a set of focal nodes, encode the graph *without* those edges, then ask the decoder to predict which ones were real. Hard negatives come from 2-hop neighbors that aren't directly connected. Loss is binary cross-entropy averaged across edge types.
 
-- **Evaluation**: AUC-ROC on held-out repos with 50% edge masking per type and hard negatives.
+**Evaluation**: AUC-ROC on held-out repos, with 50% edge masking per type and hard negatives.
+
+See [docs/architecture.md](docs/architecture.md) for a deeper dive, including the tradeoff between the heterogeneous and homogeneous export paths.
 
 ## Export
 
-### Heterogeneous HGT encoder (recommended)
+### HGT encoder (recommended)
 
-Exports the trained HGT encoder to ONNX using a manual reimplementation of HGTConv with primitive tensor ops:
+Exports the trained HGT encoder to ONNX:
 
 ```bash
-python -c "from src.export.manual_hgt import export_encoder_onnx; export_encoder_onnx('data/models/best_model.pt', 'data/models')"
+python -c "from src.export.manual_hgt import export_encoder_onnx; \
+  export_encoder_onnx('data/models/best_model.pt', 'data/models')"
 ```
 
-Inputs: `node_features` (N x 404) + 5 separate `edge_index_{type}` tensors.
-Output: `node_embeddings` (N x 128).
+Takes: `node_features` (N x 404) + 5 per-type edge index tensors.
+Returns: `node_embeddings` (N x 128).
 
-### Homogeneous GCN scorer (legacy)
+### GCN scorer (legacy)
 
-Collapsed GCN that uses a single adjacency matrix:
+A simpler model that collapses all edge types into one adjacency matrix:
 
 ```bash
 python scripts/export.py
 ```
 
-Inputs: `node_features` (N x 404) + `adj_matrix` (N x N).
-Output: `anomaly_scores` (N,).
-
-See [docs/architecture.md](docs/architecture.md) for the design tradeoff between these two approaches.
+Takes: `node_features` (N x 404) + `adj_matrix` (N x N).
+Returns: `anomaly_scores` (N,).
 
 ### Text encoder
 
-Export `all-MiniLM-L6-v2` to ONNX for self-contained deployment:
+Export the sentence transformer to ONNX for self-contained deployment:
 
 ```bash
 python scripts/export_text_encoder_onnx.py
@@ -168,7 +192,7 @@ dataset:
 
 ### `config/repos.yaml`
 
-Lists 60 open-source repositories (20 per language) used as training data. Edit to add/remove repos:
+Lists 60 open-source repositories (20 per language) used as training data. Add your own:
 
 ```yaml
 java:
@@ -184,52 +208,44 @@ typescript:
 ```
 striff-gnn/
 ├── src/
-│   ├── model/          # ArchGraphMAE model (encoder + decoder)
-│   │   ├── encoder.py      # HGT-based encoder using PyG HGTConv
-│   │   ├── decoder.py      # Per-edge-type reconstruction head
-│   │   └── graph_mae.py    # Full masked autoencoder
-│   ├── graph/          # Graph construction and feature engineering
-│   │   ├── features.py     # 404-dim feature vectors
-│   │   ├── dataset.py      # Graph → PyG HeteroData conversion
-│   │   └── sampler.py      # Subgraph sampling (BFS + random)
-│   ├── corpus/         # Data ingestion pipeline
-│   │   ├── cloner.py       # Git repo cloning
-│   │   ├── parser_client.py # Clarpse API client
-│   │   ├── normalizer.py   # Raw parse → normalized graph
-│   │   └── source_parser.py # Regex-based fallback parser
-│   ├── train/          # Training and evaluation
-│   │   ├── train.py        # Main training loop
-│   │   ├── losses.py       # BCE loss for edge reconstruction
-│   │   └── eval.py         # AUC evaluation with hard negatives
-│   ├── export/         # ONNX export utilities
-│   │   ├── manual_hgt.py   # ONNX-exportable HGT (primitive ops)
-│   │   ├── to_onnx.py      # Homogeneous GCN scorer export
-│   │   └── metadata.py     # Model metadata bundling
-│   └── tools/          # Debugging utilities
-├── config/             # Training configs and repo lists
-├── scripts/            # Pipeline entry points
+│   ├── model/              # ArchGraphMAE model
+│   │   ├── encoder.py          # HGT encoder (uses PyG HGTConv)
+│   │   ├── decoder.py          # Per-edge-type reconstruction head
+│   │   └── graph_mae.py        # Full masked autoencoder
+│   ├── graph/              # Graph construction and features
+│   │   ├── features.py         # 404-dim feature builder
+│   │   ├── dataset.py          # Graph → PyG HeteroData conversion
+│   │   └── sampler.py          # Subgraph sampling (BFS + random)
+│   ├── corpus/             # Data ingestion
+│   │   ├── cloner.py           # Git repo cloning
+│   │   ├── parser_client.py    # Clarpse API client
+│   │   ├── normalizer.py       # Raw Clarpse output → normalized graph
+│   │   └── source_parser.py    # Regex-based fallback parser
+│   ├── train/              # Training and evaluation
+│   │   ├── train.py            # Main training loop
+│   │   ├── losses.py           # BCE loss
+│   │   └── eval.py             # AUC evaluation with hard negatives
+│   ├── export/             # ONNX export
+│   │   ├── manual_hgt.py       # ONNX-exportable HGT (primitive ops)
+│   │   ├── to_onnx.py          # Homogeneous GCN scorer export
+│   │   └── metadata.py         # Model metadata bundling
+│   └── tools/              # Debug utilities
+├── config/                 # Training configs and repo lists
+├── scripts/                # Pipeline entry points
 ├── docs/
-│   ├── architecture.md     # Architecture deep-dive
-│   └── data-format.md      # Graph format specification
-├── pyproject.toml
-└── LICENSE            # MIT
+│   ├── architecture.md         # Architecture deep-dive
+│   └── data-format.md          # Graph format specification
+└── pyproject.toml
 ```
 
-## Links
-
-- **STRIFF**: [striff.io](https://striff.io)
-- **Clarpse**: Source code structural parser used for graph extraction
-
 ## Citation
-
-If you use this in your research, please cite:
 
 ```bibtex
 @software{striff-gnn,
   title = {striff-gnn: Graph Neural Networks for Software Architecture Analysis},
   author = {STRIFF},
-  url = {https://github.com/striff-io/striff-gnn},
-  year = {2025}
+  url = {https://github.com/hadi-technology/striff-gnn},
+  year = {2026}
 }
 ```
 
