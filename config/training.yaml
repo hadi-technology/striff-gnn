@@ -1,0 +1,24 @@
+model:
+  hidden_dim: 128
+  num_layers: 3
+  num_heads: 4
+
+training:
+  epochs: 50
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  batch_size: 32
+
+dataset:
+  clustered_samples: 20
+  random_samples: 5
+  min_focal_size: 50
+  max_focal_size: 500
+  validation_repos: 5
+
+edge_types:
+  - EXTENSION
+  - IMPLEMENTATION
+  - COMPOSITION
+  - AGGREGATION
+  - ASSOCIATION

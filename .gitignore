@@ -1,0 +1,24 @@
+# Data (large files)
+data/
+*.pt
+*.onnx
+*.npz
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.venv/
+
+# Env
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store

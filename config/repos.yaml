@@ -1,0 +1,111 @@
+# 20 repos per language, diverse domains and sizes
+java:
+  # Large enterprise frameworks
+  - { url: https://github.com/spring-projects/spring-framework,    ref: main }
+  - { url: https://github.com/quarkusio/quarkus,                    ref: main }
+  - { url: https://github.com/apache/kafka,                         ref: trunk }
+  # Middleware / messaging
+  - { url: https://github.com/apache/flink,                         ref: master }
+  - { url: https://github.com/apache/cassandra,                     ref: trunk }
+  - { url: https://github.com/elastic/elasticsearch,                ref: main }
+  # HTTP clients & servers
+  - { url: https://github.com/square/okhttp,                        ref: master }
+  - { url: https://github.com/eclipse-vertx/vert.x,                 ref: master }
+  # Dependency injection
+  - { url: https://github.com/google/dagger,                        ref: master }
+  # Reactive
+  - { url: https://github.com/ReactiveX/RxJava,                     ref: 3.x }
+  # Networking
+  - { url: https://github.com/netty/netty,                          ref: 4.1 }
+  # Utilities / collections
+  - { url: https://github.com/google/guava,                         ref: master }
+  - { url: https://github.com/apache/commons-lang,                  ref: master }
+  # Build tools
+  - { url: https://github.com/apache/maven,                         ref: master }
+  # Search
+  - { url: https://github.com/apache/lucene,                        ref: main }
+  # Coordination
+  - { url: https://github.com/apache/zookeeper,                     ref: master }
+  # RPC
+  - { url: https://github.com/apache/dubbo,                         ref: 3.2 }
+  # Compiler / language
+  - { url: https://github.com/JetBrains/kotlin,                     ref: master }
+  # Testing
+  - { url: https://github.com/junit-team/junit5,                    ref: main }
+  # CI/CD
+  - { url: https://github.com/jenkinsci/jenkins,                    ref: master }
+
+python:
+  # Web frameworks
+  - { url: https://github.com/django/django,                        ref: main }
+  - { url: https://github.com/pallets/flask,                        ref: main }
+  - { url: https://github.com/tiangolo/fastapi,                     ref: master }
+  # Data science
+  - { url: https://github.com/scikit-learn/scikit-learn,            ref: main }
+  - { url: https://github.com/pandas-dev/pandas,                    ref: main }
+  - { url: https://github.com/numpy/numpy,                          ref: main }
+  # Type checking
+  - { url: https://github.com/python/mypy,                          ref: master }
+  # ORM / DB
+  - { url: https://github.com/sqlalchemy/sqlalchemy,                ref: main }
+  # Task queues
+  - { url: https://github.com/celery/celery,                        ref: main }
+  # HTTP
+  - { url: https://github.com/encode/httpx,                         ref: master }
+  - { url: https://github.com/psf/requests,                         ref: main }
+  # Validation
+  - { url: https://github.com/pydantic/pydantic,                    ref: main }
+  # Package management
+  - { url: https://github.com/python-poetry/poetry,                 ref: master }
+  # Web scraping
+  - { url: https://github.com/scrapy/scrapy,                        ref: master }
+  # Testing
+  - { url: https://github.com/pytest-dev/pytest,                    ref: main }
+  # Async
+  - { url: https://github.com/tornadoweb/tornado,                   ref: master }
+  # ML ops
+  - { url: https://github.com/mlflow/mlflow,                        ref: master }
+  # Linting
+  - { url: https://github.com/astral-sh/ruff,                       ref: main }
+  # CLI
+  - { url: https://github.com/pallets/click,                        ref: main }
+  # Configuration
+  - { url: https://github.com/python-attrs/attrs,                   ref: main }
+
+typescript:
+  # Language / compiler
+  - { url: https://github.com/microsoft/TypeScript,                 ref: main }
+  # Editors
+  - { url: https://github.com/microsoft/vscode,                     ref: main }
+  # Web frameworks
+  - { url: https://github.com/nestjs/nest,                          ref: master }
+  - { url: https://github.com/angular/angular,                      ref: main }
+  - { url: https://github.com/vercel/next.js,                       ref: canary }
+  - { url: https://github.com/honojs/hono,                          ref: main }
+  # ORM
+  - { url: https://github.com/prisma/prisma,                        ref: main }
+  - { url: https://github.com/typeorm/typeorm,                      ref: master }
+  # Testing
+  - { url: https://github.com/microsoft/playwright,                 ref: main }
+  # Full-stack
+  - { url: https://github.com/redwoodjs/redwood,                    ref: main }
+  # API
+  - { url: https://github.com/trpc/trpc,                            ref: main }
+  # Drawing
+  - { url: https://github.com/excalidraw/excalidraw,                ref: master }
+  # Component libraries
+  - { url: https://github.com/storybookjs/storybook,                ref: main }
+  # GraphQL
+  - { url: https://github.com/apollographql/apollo-client,          ref: main }
+  # Static site
+  - { url: https://github.com/withastro/astro,                      ref: main }
+  # Linting
+  - { url: https://github.com/eslint/eslint,                        ref: main }
+  # Bundler
+  - { url: https://github.com/evanw/esbuild,                        ref: main }
+  # State management
+  - { url: https://github.com/pmndrs/zustand,                       ref: main }
+  # Forms
+  - { url: https://github.com/react-hook-form/react-hook-form,      ref: master }
+  # Charts
+  - { url: https://github.com/recharts/recharts,                    ref: master }

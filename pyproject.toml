@@ -1,0 +1,21 @@
+[project]
+name = "striff-gnn"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.2,<2.5",
+    "torch-geometric>=2.5",
+    "transformers>=4.40",
+    "sentence-transformers>=2.7",
+    "onnx>=1.16",
+    "onnxruntime>=1.17",
+    "pyyaml>=6.0",
+    "gitpython>=3.1",
+    "requests>=2.31",
+    "tqdm>=4.66",
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.4"]
