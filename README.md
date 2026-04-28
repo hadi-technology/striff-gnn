@@ -243,7 +243,7 @@ striff-gnn/
 ```bibtex
 @software{striff-gnn,
   title = {striff-gnn: Graph Neural Networks for Software Architecture Analysis},
-  author = {STRIFF},
+  author = {Muntazir Fadhel},
   url = {https://github.com/hadi-technology/striff-gnn},
   year = {2026}
 }
